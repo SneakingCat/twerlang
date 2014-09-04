@@ -18,7 +18,7 @@
 start() ->
     io:format("=> STARTING <=~n"),
     spawn (fun () ->
-		   register(?MODULE, self()),
+		   register(server, self()),
 		   message_receiver(#state {})
 	   end).
 
@@ -46,7 +46,7 @@ message_receiver(#state {users=Users}=State) ->
 		    List = case Action of
 			       following -> User#user.following;
 			       followers -> User#user.followers;
-			       tweets    -> lists:reverse(User#user.tweets)
+			       tweets    -> User#user.tweets
 			   end,						
 		    From ! {ok, List},
 		    message_receiver(State);
@@ -81,6 +81,10 @@ message_receiver(#state {users=Users}=State) ->
 			message_receiver(State)
 		end;
 
+	{From, follow, _Anything} when is_pid(From) ->
+	    From ! {error, illegal_register_format},
+	    message_receiver(State);
+
 	%% Tweet for the given user. Replies can be one of:
 	%% {ok, [string()]}
 	%% {error, no_such_user}
@@ -94,7 +98,7 @@ message_receiver(#state {users=Users}=State) ->
 		    TweetedUsers = tweet_followers(Tweet, 
 						   User#user.followers,
 						   Users),
-		    From ! {ok, lists:reverse(TweetedUser#user.tweets)},
+		    From ! {ok, TweetedUser#user.tweets},
 		    message_receiver(State#state 
 				     {users=[TweetedUser|removeUsers([User], 
 								     TweetedUsers)]});
@@ -103,6 +107,10 @@ message_receiver(#state {users=Users}=State) ->
 		    From ! {error, no_such_user},
 		    message_receiver(State)
 	    end;
+
+	{From, tweet, _Anything} when is_pid(From) ->
+	    From ! {error, illegal_register_format},
+	    message_receiver(State);
 
 	%% Register a new user in the format {atom(),
 	%% string()}. Replies can be one of:
